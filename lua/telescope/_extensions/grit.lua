@@ -102,11 +102,7 @@ local get_grit_entry = function(opts)
 	mt = {
 		cwd = utils.path_expand(opts.cwd or vim.loop.cwd()),
 		display = function(entry)
-			local isReplacing = mt.text == "rewritten"
-			if not isReplacing then
-				return entry[1]
-			end
-			return "rewriting!!!"
+			return entry[1]
 		end,
 		-- see telescope/make_entry.lua:342
 		__index = function(t, k)
