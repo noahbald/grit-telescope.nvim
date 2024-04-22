@@ -16,17 +16,29 @@ Grit and Telescope need to be installed for this plugin to work
 
 ## Features
 
-This is still in early development and not all features you may want are available yet
+If you think a feature is missing, please create an issue for it :)
 
-- [x] Query using grit patterns and workflows
-- [ ] Display preview of matches
-- [ ] Display preview of modifications
-- [ ] Action to apply a specific entry
-- [ ] Action to apply all entries
+- Query using grit patterns and workflows
+- Display preview of matches
+- Display preview of modifications
+- Action to apply a specific entry
+- Action to apply all entries
+
+## Usage
+
+```vi
+:Telescope grit
+```
+
+| key         | action                             |
+| ----------- | ---------------------------------- |
+| `<C-space>` | Apply replacement to selected file |
+| `<C-a>`     | Apply replacement to all files     |
 
 ## Configuration
 
 This plugin wraps around the [apply](https://docs.grit.io/cli/reference#grit-apply) command. The preview always runs the command as a dry run, so no changes are applied without confirmation.
+
 Read grit's reference to see the available options for configuration
 
 ```lua
@@ -34,6 +46,8 @@ Read grit's reference to see the available options for configuration
   "noahbald/grit-telescope.nvim",
   -- NOTE: Not all these configuration options are available yet
   opts = {
+    -- Change the directory patterns are queried on
+    cwd = vim.loop.cwd()
     -- Change the default language to use for the pattern.
     language = "js",
     -- Interpret the request as a natural language request.
