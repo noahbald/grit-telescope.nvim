@@ -22,7 +22,7 @@ If you think a feature is missing, please create an issue for it :)
 - Display preview of matches
 - Display preview of modifications
 - Action to apply a specific entry
-- Action to apply all entries
+- Action to apply all entries (Note, only works for future version of grit)
 
 ## Usage
 
@@ -30,10 +30,11 @@ If you think a feature is missing, please create an issue for it :)
 :Telescope grit
 ```
 
-| key         | action                             |
-| ----------- | ---------------------------------- |
-| `<C-space>` | Apply replacement to selected file |
-| `<C-a>`     | Apply replacement to all files     |
+| key         | action                              |
+| ----------- | ----------------------------------- |
+| `<C-space>` | Apply replacement to selected entry |
+| `<C-f>`     | Apply replacement to selected file  |
+| `<C-a>`     | Apply replacement to all files      |
 
 ## Configuration
 
