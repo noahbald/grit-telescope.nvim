@@ -6,6 +6,8 @@
 
 Grit and Telescope need to be installed for this plugin to work
 
+![Recording of using gritql for a basic match query](https://github.com/noahbald/grit-telescope.nvim/assets/36181524/bc238c7a-4dce-4017-98fe-cec34a50e88b)
+
 ### Lazy
 
 ```lua
