@@ -37,14 +37,15 @@ If you think a feature is missing, please create an issue for it :)
 | `<C-space>` | Apply replacement to selected entry |
 | `<C-f>`     | Apply replacement to selected file  |
 | `<C-a>`     | Apply replacement to all files      |
+| `<cr>`      | Open file                           |
 
 ```vi
 :Telescope grit_list
 ```
 
-| key       | action                                            |
-| --------- | ------------------------------------------------- |
-| `<space>` | Run `:Telescope grit` with the pattern pre-filled |
+| key    | action                                            |
+| ------ | ------------------------------------------------- |
+| `<cr>` | Run `:Telescope grit` with the pattern pre-filled |
 
 ## Configuration
 
