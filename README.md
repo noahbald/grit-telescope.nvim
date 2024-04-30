@@ -38,6 +38,14 @@ If you think a feature is missing, please create an issue for it :)
 | `<C-f>`     | Apply replacement to selected file  |
 | `<C-a>`     | Apply replacement to all files      |
 
+```vi
+:Telescope grit_list
+```
+
+| key       | action                                            |
+| --------- | ------------------------------------------------- |
+| `<space>` | Run `:Telescope grit` with the pattern pre-filled |
+
 ## Configuration
 
 This plugin wraps around the [apply](https://docs.grit.io/cli/reference#grit-apply) command. The preview always runs the command as a dry run, so no changes are applied without confirmation.
@@ -47,7 +55,6 @@ Read grit's reference to see the available options for configuration
 ```lua
 {
   "noahbald/grit-telescope.nvim",
-  -- NOTE: Not all these configuration options are available yet
   opts = {
     -- Change the directory patterns are queried on
     cwd = vim.loop.cwd()
@@ -55,10 +62,13 @@ Read grit's reference to see the available options for configuration
     language = "js",
     -- Interpret the request as a natural language request.
     ai = false,
+    -- The source of patterns to display when running `:Telescope grit_list`
+    source = "user",
   },
   -- NOTE: Keys are not provided by default
   keys = {
     { "<leader>fq", "<cmd>Telescope grit<cr>", desc = "Telescope Grit Query" },
-  }
+    { "<leader>fQ" "<cmd>Telescope grit_list<cr>", desc = "Telescope Grit User Patterns"},
+  },
 }
 ```

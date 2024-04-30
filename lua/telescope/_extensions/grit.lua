@@ -2,15 +2,18 @@ local utils = require("telescope.utils")
 local pickers = require("telescope.pickers")
 local previewers = require("telescope.previewers")
 local conf = require("telescope.config").values
+local telescope_actions = require("telescope.actions")
 local action_state = require("telescope.actions.state")
 
+local async = require("plenary.async")
 local async_job = require("telescope._")
 local LinesPipe = require("telescope._").LinesPipe
 
 local make_entry = require("telescope.make_entry")
 local log = require("telescope.log")
 
--- see telescope/finders/async_job_finder (7d1698f3d88b)
+--- see telescope/finders/async_job_finder (7d1698f3d88b)
+--- Modified for use with `grit apply`
 local async_job_finder = function(opts)
 	log.trace("Creating async_job:", opts)
 	local entry_maker = opts.entry_maker or make_entry.gen_from_string(opts)
@@ -113,14 +116,153 @@ local async_job_finder = function(opts)
 	})
 end
 
+local await_count = 1000
+
+--- see telescope/finders/async_oneshot_finder (7d1698f3d88b)
+--- Modified for use with `grit list patterns`
+local async_oneshot_finder = function(opts)
+	opts = opts or {}
+
+	local entry_maker = opts.entry_maker or make_entry.gen_from_string(opts)
+	local cwd = opts.cwd
+	local env = opts.env
+	local fn_command = assert(opts.fn_command, "Must pass `fn_command`")
+
+	local results = vim.F.if_nil(opts.results, {})
+	local num_results = #results
+
+	local job_started = false
+	local job_completed = false
+	local stdout = nil
+
+	local job
+
+	return setmetatable({
+		close = function()
+			if job then
+				job:close()
+			end
+		end,
+		results = results,
+		entry_maker = entry_maker,
+	}, {
+		__call = function(_, _, process_result, process_complete)
+			if not job_started then
+				local job_opts = fn_command()
+
+				-- TODO: Handle writers.
+				-- local writer
+				-- if job_opts.writer and Job.is_job(job_opts.writer) then
+				--   writer = job_opts.writer
+				-- elseif job_opts.writer then
+				--   writer = Job:new(job_opts.writer)
+				-- end
+
+				stdout = LinesPipe()
+				job = async_job.spawn({
+					command = job_opts.command,
+					args = job_opts.args,
+					cwd = cwd,
+					env = env,
+
+					stdout = stdout,
+				})
+
+				job_started = true
+			end
+
+			if not job_completed then
+				if not vim.tbl_isempty(results) then
+					for _, v in ipairs(results) do
+						process_result(v)
+					end
+				end
+				for line in stdout:iter(false) do
+					local data = vim.json.decode(line)
+					if not data then
+						goto continue
+					end
+					for _, item in pairs(data) do
+						num_results = num_results + 1
+
+						if num_results % await_count then
+							async.util.scheduler()
+						end
+
+						local entry = entry_maker(item)
+						if entry then
+							entry.index = num_results
+						end
+						results[num_results] = entry
+						process_result(entry)
+					end
+					::continue::
+				end
+
+				process_complete()
+				job_completed = true
+
+				return
+			end
+
+			local current_count = num_results
+			for index = 1, current_count do
+				-- TODO: Figure out scheduling...
+				if index % await_count then
+					async.util.scheduler()
+				end
+
+				if process_result(results[index]) then
+					break
+				end
+			end
+
+			if job_completed then
+				process_complete()
+			end
+		end,
+	})
+end
+
 local finders = {}
 
--- see telescope/finders:176 (7d1698f3d88b)
+--- see telescope/finders:176 (7d1698f3d88b)
+--- Modified for use with `grit apply`
 finders.new_job = function(command_generator, entry_maker, _, cwd)
 	return async_job_finder({
 		command_generator = command_generator,
 		entry_maker = entry_maker,
 		cwd = cwd,
+	})
+end
+
+--- see telescope/finders:176 (7d1698f3d88b)
+--- Modified for use with `grit list patterns`
+--- One shot job
+---@param command_list string[]: Command list to execute.
+---@param opts table: stuff
+--         @key entry_maker function Optional: function(line: string) => table
+--         @key cwd string
+finders.new_oneshot_job = function(command_list, opts)
+	opts = opts or {}
+
+	assert(not opts.results, "`results` should be used with finder.new_table")
+
+	command_list = vim.deepcopy(command_list)
+	local command = table.remove(command_list, 1)
+
+	return async_oneshot_finder({
+		entry_maker = opts.entry_maker or make_entry.gen_from_string(opts),
+
+		cwd = opts.cwd,
+		maximum_results = opts.maximum_results,
+
+		fn_command = function()
+			return {
+				command = command,
+				args = command_list,
+			}
+		end,
 	})
 end
 
@@ -140,6 +282,8 @@ local get_grit_command = function(prompt, opts)
 
 	local only_in_json = {}
 	if opts.only_in_json then
+		-- FIXME: This doesn't work, but soon we should be able to pass a string instead of file stream
+		-- https://github.com/getgrit/gritql/issues/264#issuecomment-2071151550
 		only_in_json = { "--only-in-json", "<", "echo", opts.only_in_json }
 	end
 
@@ -170,6 +314,51 @@ local get_only_in_json = function(entry)
 		.. " }] }]"
 end
 
+local get_grit_list_display = function(entry)
+	local line = entry.line
+	if not line.config then
+		return nil
+	end
+
+	local length = #line.config.name
+	local style = {}
+	local tags = ""
+	if line.config.tags and line.config.tags ~= vim.NIL then
+		local start = length
+		tags = " " .. table.concat(line.config.tags, " ")
+		length = length + #tags
+		local end_pos = length
+		table.insert(style, { { start, end_pos }, "@text.todo.unchecked" })
+	end
+
+	local level = ""
+	if line.config.level then
+		local start = length + 1
+		level = " " .. line.config.level
+		length = length + #level
+		local end_pos = length
+		local highlight = "@text.underline"
+		if line.config.level == "warn" then
+			highlight = "@text.warning"
+		elseif line.config.level == "error" then
+			highlight = "@error"
+		end
+		table.insert(style, { { start, end_pos }, highlight })
+	end
+
+	local source = ""
+	if line.module then
+		source = " (source: "
+		local start = length + #source
+		source = source .. line.module.path
+		local end_pos = length + #source
+		source = source .. ")"
+		length = length + #source
+		table.insert(style, { { start, end_pos }, "@field" })
+	end
+	return line.config.name .. tags .. level .. source, style
+end
+
 local get_grit_entry = function(opts)
 	local mt
 	mt = {
@@ -197,16 +386,21 @@ local get_grit_entry = function(opts)
 	end
 end
 
+local function merge(target, source)
+	local copy = {}
+	for k, v in pairs(target) do
+		copy[k] = v
+	end
+	for k, v in pairs(source) do
+		copy[k] = v
+	end
+	return copy
+end
+
 local actions
 actions = {
 	_command = function(opts, action_opts)
-		local all_opts = {}
-		for k, v in pairs(opts) do
-			all_opts[k] = v
-		end
-		for k, v in pairs(action_opts) do
-			all_opts[k] = v
-		end
+		local all_opts = merge(opts, action_opts)
 		-- NOTE: Doesn't work when switching between previewers while typing
 		-- https://github.com/nvim-telescope/telescope.nvim/issues/3051
 		local line = action_state.get_current_line()
@@ -305,7 +499,7 @@ local previewer = function(opts)
 	return mt
 end
 
-local function grit(opts)
+local function grit(opts, starting_value)
 	opts = opts or {}
 	opts.cwd = opts.cwd or vim.loop.cwd()
 
@@ -314,12 +508,13 @@ local function grit(opts)
 			return nil
 		end
 		return get_grit_command(prompt, opts)
-	end, opts.entry_maker or get_grit_entry(opts), opts.max_results, opts.cwd)
+	end, opts.grit_entry_maker or get_grit_entry(opts), opts.max_results, opts.cwd)
 	pickers
 		.new(opts, {
 			prompt_title = "Live GritQL Search",
 			finder = live_grit,
 			previewer = previewer(opts),
+			default_text = starting_value,
 			attach_mappings = function(_, map)
 				map("i", "<c-space>", actions.apply_to_entry(opts))
 				map("i", "<c-f>", actions.apply_to_file(opts))
@@ -330,9 +525,46 @@ local function grit(opts)
 		:find()
 end
 
-grit()
+local function grit_list(opts)
+	opts = opts or {}
+	opts.source = opts.source or "user"
+	opts.cwd = opts.cwd or vim.loop.cwd()
+	opts.entry_maker = opts.grit_list_entry_maker
+		or function(line)
+			if not line.config then
+				return nil
+			end
+			return {
+				line = line,
+				path = "~/" .. line.config.path,
+				value = line.config.name,
+				ordinal = line.config.name,
+				display = get_grit_list_display,
+			}
+		end
+	local finder = finders.new_oneshot_job({ "grit", "patterns", "list", "--source", opts.source, "--json" }, opts)
+	pickers
+		.new(opts, {
+			prompt_title = "Grit user patterns",
+			finder = finder,
+			previewer = conf.file_previewer(opts),
+			sorter = conf.generic_sorter(opts),
+			attach_mappings = function(_)
+				telescope_actions.select_default:replace(function(buffer)
+					telescope_actions.close(buffer)
+					local entry = action_state.get_selected_entry()
+					grit(opts, entry.value)
+				end)
+				return true
+			end,
+		})
+		:find()
+end
+
+grit_list()
 return require("telescope").register_extension({
 	exports = {
 		grit = grit,
+		grit_list = grit_list,
 	},
 })
