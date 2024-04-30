@@ -68,7 +68,7 @@ Read grit's reference to see the available options for configuration
   -- NOTE: Keys are not provided by default
   keys = {
     { "<leader>fq", "<cmd>Telescope grit<cr>", desc = "Telescope Grit Query" },
-    { "<leader>fQ" "<cmd>Telescope grit_list<cr>", desc = "Telescope Grit User Patterns"},
+    { "<leader>fQ", "<cmd>Telescope grit_list<cr>", desc = "Telescope Grit User Patterns"},
   },
 }
 ```
