@@ -284,7 +284,7 @@ local get_grit_command = function(prompt, opts)
 	if opts.only_in_json then
 		-- FIXME: This doesn't work, but soon we should be able to pass a string instead of file stream
 		-- https://github.com/getgrit/gritql/issues/264#issuecomment-2071151550
-		only_in_json = { "--only-in-json", "<", "echo", opts.only_in_json }
+		only_in_json = { "--only-in-json", opts.only_in_json }
 	end
 
 	return vim.tbl_flatten({
