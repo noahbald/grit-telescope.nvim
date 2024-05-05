@@ -564,7 +564,7 @@ end
 grit_list()
 return require("telescope").register_extension({
 	exports = {
-		grit = grit,
-		grit_list = grit_list,
+		query = grit,
+		list = grit_list,
 	},
 })
